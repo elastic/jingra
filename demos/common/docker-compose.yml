@@ -1,0 +1,16 @@
+services:
+  jingra:
+    build:
+      context: ${BUILD_CONTEXT:-../..}
+      dockerfile: demos/common/Dockerfile
+    volumes:
+      - ${DATA_PATH:-./data}:/app/data
+      - ./config.yaml:/app/config.yaml
+      - ./config:/app/jingra-config
+      - ./output:/app/output
+    networks:
+      - jingra-demo-net
+
+networks:
+  jingra-demo-net:
+    driver: bridge

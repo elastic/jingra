@@ -106,9 +106,15 @@ public final class ConfigValidator {
         requireNonNullState(ds.getPath(), "dataset.path is required for evaluation");
         requireNonBlank(ds.getPath().getQueriesPath(), "dataset.path.queries_path is required for evaluation");
         requireNonNullState(ds.getQueriesMapping(), "dataset.queries_mapping is required for evaluation");
-        requireNonBlank(
-                ds.getQueriesMapping().getQueryVectorField(),
-                "dataset.queries_mapping.query_vector_field is required");
+
+        String vectorField = ds.getQueriesMapping().getQueryVectorField();
+        String textField = ds.getQueriesMapping().getQueryTextField();
+        boolean vectorFieldMissing = vectorField == null ? true : vectorField.isBlank();
+        boolean textFieldMissing = textField == null ? true : textField.isBlank();
+        if (vectorFieldMissing & textFieldMissing) { // `&`: both booleans already; no short-circuit on the pair
+            throw new IllegalStateException(
+                "dataset.queries_mapping.query_vector_field or query_text_field is required");
+        }
         requireNonBlank(
                 ds.getQueriesMapping().getGroundTruthField(),
                 "dataset.queries_mapping.ground_truth_field is required");
@@ -143,8 +149,8 @@ public final class ConfigValidator {
         }
         AnalysisConfig ac = config.getAnalysis();
         requireNonBlank(ac.getRunId(), "analysis.run_id is required");
-        if (ac.getEngines() == null || ac.getEngines().size() < 2) {
-            throw new IllegalStateException("analysis.engines must have at least 2 engines to compare");
+        if (ac.getEngines() == null || ac.getEngines().size() < 1) {
+            throw new IllegalStateException("analysis.engines must have at least 1 engine");
         }
         if (ac.getResultsCluster() == null || ac.getResultsCluster().isEmpty()) {
             throw new IllegalStateException("analysis.results_cluster configuration is required");

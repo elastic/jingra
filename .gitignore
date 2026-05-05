@@ -33,6 +33,13 @@ jingra-config/
 __pycache__/
 *.pyc
 
+# Demo analysis output (generated at runtime)
+demos/*/*/output/
+demos/.run-start
+
+# Demo data files (generated locally by generate_data.py, not committed)
+demos/*/data/
+
 # Local review artifacts
 
 REVIEW*.md
