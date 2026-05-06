@@ -6,8 +6,10 @@ import org.elasticsearch.jingra.config.LoadConfig;
 import org.elasticsearch.jingra.data.DatasetReader;
 import org.elasticsearch.jingra.data.ParquetReader;
 import org.elasticsearch.jingra.model.Document;
+import org.elasticsearch.jingra.engine.ElasticsearchEngine;
 import org.elasticsearch.jingra.engine.EngineFactory;
 import org.elasticsearch.jingra.testing.MockBenchmarkEngine;
+import org.elasticsearch.jingra.engine.BenchmarkEngine;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -442,6 +445,151 @@ class LoadCommandTest {
             }
         };
         LoadCommand.waitUntilIndexAbsent(engine, "idx");
+    }
+
+    @Test
+    void run_forcemergeTrue_callsForcemergeOnElasticsearchEngine() throws Exception {
+        LoadCommand.datasetReaderFactory = p -> new StubParquetReader(2, oneBatchOf(2));
+        JingraConfig config = buildLoadConfig("src/test/resources/parquet/test_text_data.parquet");
+        LoadConfig load = new LoadConfig();
+        load.setForcemerge(true);
+        config.setLoad(load);
+
+        AtomicBoolean forceMergeCalled = new AtomicBoolean(false);
+        ElasticsearchEngine esEngine = new ElasticsearchEngine(new HashMap<>()) {
+            @Override
+            protected boolean hasClient() {
+                return true;
+            }
+
+            @Override
+            public boolean connect() {
+                return true;
+            }
+
+            @Override
+            public boolean indexExists(String indexName) {
+                return false;
+            }
+
+            @Override
+            public boolean createIndex(String indexName, String schemaName) {
+                return true;
+            }
+
+            @Override
+            public int ingest(List<Document> documents, String indexName, String idField) {
+                return documents.size();
+            }
+
+            @Override
+            public long getDocumentCount(String indexName) {
+                return 2;
+            }
+
+            @Override
+            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+                forceMergeCalled.set(true);
+                return "nodeA:1";
+            }
+
+            @Override
+            protected String pollTaskOperation(String taskId) {
+                return "{\"completed\":true}";
+            }
+
+            @Override
+            protected long getPollIntervalMs() { return 0L; }
+        };
+
+        LoadCommand.run(config, c -> esEngine);
+        assertTrue(forceMergeCalled.get(), "forcemerge should be called when forcemerge: true and engine is ElasticsearchEngine");
+    }
+
+    @Test
+    void run_forcemergeFalse_skipsForcemerge() throws Exception {
+        LoadCommand.datasetReaderFactory = p -> new StubParquetReader(2, oneBatchOf(2));
+        JingraConfig config = buildLoadConfig("src/test/resources/parquet/test_text_data.parquet");
+        // forcemerge defaults to false — no LoadConfig set, so getLoad() returns null
+
+        AtomicBoolean forceMergeCalled = new AtomicBoolean(false);
+        ElasticsearchEngine esEngine = new ElasticsearchEngine(new HashMap<>()) {
+            @Override
+            protected boolean hasClient() {
+                return true;
+            }
+
+            @Override
+            public boolean connect() {
+                return true;
+            }
+
+            @Override
+            public boolean indexExists(String indexName) {
+                return false;
+            }
+
+            @Override
+            public boolean createIndex(String indexName, String schemaName) {
+                return true;
+            }
+
+            @Override
+            public int ingest(List<Document> documents, String indexName, String idField) {
+                return documents.size();
+            }
+
+            @Override
+            public long getDocumentCount(String indexName) {
+                return 2;
+            }
+
+            @Override
+            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+                forceMergeCalled.set(true);
+                return "nodeA:1";
+            }
+
+            @Override
+            protected String pollTaskOperation(String taskId) {
+                return "{\"completed\":true}";
+            }
+
+            @Override
+            protected long getPollIntervalMs() { return 0L; }
+        };
+
+        LoadCommand.run(config, c -> esEngine);
+        assertFalse(forceMergeCalled.get(), "forcemerge should not be called when forcemerge is false");
+    }
+
+    @Test
+    void run_forcemergeTrue_nonEsEngineUsesNoOpDefault() throws Exception {
+        LoadCommand.datasetReaderFactory = p -> new StubParquetReader(2, oneBatchOf(2));
+        JingraConfig config = buildLoadConfig("src/test/resources/parquet/test_text_data.parquet");
+        LoadConfig load = new LoadConfig();
+        load.setForcemerge(true);
+        config.setLoad(load);
+
+        AtomicBoolean forcemergeCalledOnMock = new AtomicBoolean(false);
+        // Override the default no-op to detect if it is invoked; the no-op itself does nothing
+        BenchmarkEngine mockEngine = new MockBenchmarkEngine() {
+            @Override
+            public boolean indexExists(String indexName) {
+                return false;
+            }
+
+            @Override
+            public void forcemerge(String indexName, int maxNumSegments) {
+                forcemergeCalledOnMock.set(true);
+                // no-op (mirrors the interface default)
+            }
+        };
+
+        // Should complete without error; forcemerge dispatches through the interface (no-op)
+        LoadCommand.run(config, c -> mockEngine);
+        assertTrue(forcemergeCalledOnMock.get(),
+                "forcemerge() should be called on every engine via the interface; non-ES engines use the no-op default");
     }
 
     @Test

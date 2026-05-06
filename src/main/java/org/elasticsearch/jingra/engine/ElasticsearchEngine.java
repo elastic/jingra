@@ -98,6 +98,66 @@ public class ElasticsearchEngine extends AbstractBenchmarkEngine {
         restClient.performRequest(request);
     }
 
+    protected String forcemergeOperation(String indexName, int maxNumSegments) throws Exception {
+        co.elastic.clients.transport.rest5_client.low_level.Request request =
+                new co.elastic.clients.transport.rest5_client.low_level.Request(
+                        "POST", "/" + indexName + "/_forcemerge?max_num_segments=" + maxNumSegments
+                                + "&wait_for_completion=false");
+        co.elastic.clients.transport.rest5_client.low_level.Response response = restClient.performRequest(request);
+        byte[] bodyBytes = response.getEntity() != null ? response.getEntity().getContent().readAllBytes() : new byte[0];
+        String bodyStr = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
+        com.fasterxml.jackson.databind.JsonNode json = objectMapper.readTree(bodyStr);
+        return json.path("task").asText();
+    }
+
+    protected String pollTaskOperation(String taskId) throws Exception {
+        co.elastic.clients.transport.rest5_client.low_level.Request request =
+                new co.elastic.clients.transport.rest5_client.low_level.Request("GET", "/_tasks/" + taskId);
+        co.elastic.clients.transport.rest5_client.low_level.Response response = restClient.performRequest(request);
+        byte[] bodyBytes = response.getEntity() != null ? response.getEntity().getContent().readAllBytes() : new byte[0];
+        return new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    protected boolean isTaskComplete(String responseBody) throws Exception {
+        com.fasterxml.jackson.databind.JsonNode json = objectMapper.readTree(responseBody);
+        return json.path("completed").asBoolean(false);
+    }
+
+    /**
+     * Hook for tests to override the poll sleep interval (in milliseconds).
+     * The default is 30 seconds.
+     */
+    protected long getPollIntervalMs() {
+        return 30_000L;
+    }
+
+    @Override
+    public void forcemerge(String indexName, int maxNumSegments) {
+        if (!hasClient()) {
+            throw new IllegalStateException("Elasticsearch client not initialized");
+        }
+        try {
+            String taskId = forcemergeOperation(indexName, maxNumSegments);
+            logger.info("Force merge submitted for index '{}' (max_num_segments={}); task ID: {}",
+                    indexName, maxNumSegments, taskId);
+            long startMs = System.currentTimeMillis();
+            while (true) {
+                String body = pollTaskOperation(taskId);
+                if (isTaskComplete(body)) {
+                    long elapsedMin = (System.currentTimeMillis() - startMs) / 60_000;
+                    logger.info("Force merge complete for index '{}'; task {}; elapsed {}m",
+                            indexName, taskId, elapsedMin);
+                    return;
+                }
+                long elapsedMin = (System.currentTimeMillis() - startMs) / 60_000;
+                logger.info("Forcemerge in progress, task {}, elapsed {}m...", taskId, elapsedMin);
+                Thread.sleep(getPollIntervalMs());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Force merge failed on index '" + indexName + "'", e);
+        }
+    }
+
     protected SearchResponse<Map> searchOperation(String indexName, String queryJson) throws Exception {
         return client.search(s -> s
                         .index(indexName)

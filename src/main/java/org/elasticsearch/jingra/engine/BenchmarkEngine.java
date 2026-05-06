@@ -111,4 +111,15 @@ public interface BenchmarkEngine extends AutoCloseable {
      * @return schema template as Map with mappings and settings, or null if not found
      */
     Map<String, Object> getSchemaTemplate(String schemaName);
+
+    /**
+     * Trigger a force merge on the given index, reducing it to at most {@code maxNumSegments} segments.
+     * Engines that do not support force merge (e.g. Qdrant) can rely on this default no-op implementation.
+     *
+     * @param indexName the index to merge
+     * @param maxNumSegments target maximum number of segments after merge
+     */
+    default void forcemerge(String indexName, int maxNumSegments) {
+        // no-op by default — only implemented by engines that support force merge
+    }
 }

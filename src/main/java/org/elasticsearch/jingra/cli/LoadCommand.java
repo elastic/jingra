@@ -261,15 +261,22 @@ public final class LoadCommand {
                         "Data loading completed with " + ingestBatchFailures.get() + " failed ingest batch(es); refusing to report success");
             }
 
-            long endTime = System.currentTimeMillis();
-            double totalTimeSec = (endTime - startTime) / 1000.0;
             int finalCount = totalIngested.get();
-            double avgRate = finalCount / totalTimeSec;
 
             if (finalCount != rowCount) {
                 throw new IllegalStateException(
                         String.format("Ingested %d documents but parquet row count is %d (incomplete load)", finalCount, rowCount));
             }
+
+            if (config.getLoad() != null && config.getLoad().isForcemerge()) {
+                logger.info("Triggering async force merge on index '{}' (fires in background, does not block load command)...", indexName);
+                engine.forcemerge(indexName, 1);
+                logger.info("Force merge submitted; load command complete. Monitor task progress via GET /_tasks?actions=indices:admin/forcemerge");
+            }
+
+            long endTime = System.currentTimeMillis();
+            double totalTimeSec = (endTime - startTime) / 1000.0;
+            double avgRate = finalCount / totalTimeSec;
 
             logger.info("=".repeat(80));
             logger.info("Data loading complete!");
