@@ -731,18 +731,16 @@ class OpenSearchEngineBehaviorTest {
     @Test
     void forcemergeThrowsIllegalStateWhenNoClient() {
         OpenSearchEngine e = new OpenSearchEngine(new HashMap<>());
-        assertThrows(IllegalStateException.class, () -> e.forcemerge("my-index", 1));
+        assertThrows(IllegalStateException.class, () -> e.forcemerge("my-index"));
     }
 
     @Test
     void forcemergeCallsForcemergeOperationWithCorrectArgs() throws Exception {
         AtomicReference<String> capturedIndex = new AtomicReference<>();
-        AtomicReference<Integer> capturedSegments = new AtomicReference<>();
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+            protected String forcemergeOperation(String indexName) {
                 capturedIndex.set(indexName);
-                capturedSegments.set(maxNumSegments);
                 return "nodeA:42";
             }
 
@@ -754,23 +752,22 @@ class OpenSearchEngineBehaviorTest {
             @Override
             protected long getPollIntervalMs() { return 0L; }
         };
-        e.forcemerge("test-index", 1);
+        e.forcemerge("test-index");
         assertEquals("test-index", capturedIndex.get());
-        assertEquals(1, capturedSegments.get());
     }
 
     @Test
     void forcemergeWrapsExceptionsAsRuntimeException() {
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) throws Exception {
+            protected String forcemergeOperation(String indexName) throws Exception {
                 throw new IOException("merge failed");
             }
 
             @Override
             protected long getPollIntervalMs() { return 0L; }
         };
-        RuntimeException ex = assertThrows(RuntimeException.class, () -> e.forcemerge("idx", 1));
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> e.forcemerge("idx"));
         assertInstanceOf(IOException.class, ex.getCause());
         assertTrue(ex.getMessage().contains("Force merge failed"));
     }
@@ -779,7 +776,7 @@ class OpenSearchEngineBehaviorTest {
     void isTaskCompleteReturnsTrueWhenCompletedTrue() throws Exception {
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) { return ""; }
+            protected String forcemergeOperation(String indexName) { return ""; }
         };
         assertTrue(e.isTaskComplete("{\"completed\":true}"));
     }
@@ -788,7 +785,7 @@ class OpenSearchEngineBehaviorTest {
     void isTaskCompleteReturnsFalseWhenCompletedFalse() throws Exception {
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) { return ""; }
+            protected String forcemergeOperation(String indexName) { return ""; }
         };
         assertFalse(e.isTaskComplete("{\"completed\":false}"));
     }
@@ -797,7 +794,7 @@ class OpenSearchEngineBehaviorTest {
     void isTaskCompleteReturnsFalseWhenCompletedMissing() throws Exception {
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) { return ""; }
+            protected String forcemergeOperation(String indexName) { return ""; }
         };
         assertFalse(e.isTaskComplete("{\"task\":{}}"));
     }
@@ -807,7 +804,7 @@ class OpenSearchEngineBehaviorTest {
         java.util.concurrent.atomic.AtomicInteger pollCount = new java.util.concurrent.atomic.AtomicInteger(0);
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+            protected String forcemergeOperation(String indexName) {
                 return "nodeA:99";
             }
 
@@ -823,7 +820,7 @@ class OpenSearchEngineBehaviorTest {
             @Override
             protected long getPollIntervalMs() { return 0L; }
         };
-        e.forcemerge("poll-index", 1);
+        e.forcemerge("poll-index");
         assertEquals(3, pollCount.get(), "Expected 2 not-complete polls then 1 complete poll");
     }
 
@@ -881,11 +878,11 @@ class OpenSearchEngineBehaviorTest {
                 }
             };
             injectRestClient(e, rc);
-            assertDoesNotThrow(() -> e.forcemerge("idx", 1));
+            assertDoesNotThrow(() -> e.forcemerge("idx"));
             assertEquals(2, pollCalls.get());
             String q = forcemergeQuery.get();
             assertNotNull(q);
-            assertTrue(q.contains("max_num_segments=1"), q);
+            assertFalse(q.contains("max_num_segments"), q);
             assertTrue(q.contains("wait_for_completion=false"), q);
         } finally {
             rc.close();
@@ -903,9 +900,9 @@ class OpenSearchEngineBehaviorTest {
         ConnectedHarness e = new ConnectedHarness(new HashMap<>()) {};
         injectRestClient(e, mockRest);
 
-        Method fm = OpenSearchEngine.class.getDeclaredMethod("forcemergeOperation", String.class, int.class);
+        Method fm = OpenSearchEngine.class.getDeclaredMethod("forcemergeOperation", String.class);
         fm.setAccessible(true);
-        assertEquals("", fm.invoke(e, "idx", 1));
+        assertEquals("", fm.invoke(e, "idx"));
     }
 
     @Test

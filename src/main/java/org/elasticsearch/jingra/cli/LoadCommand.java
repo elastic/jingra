@@ -270,7 +270,7 @@ public final class LoadCommand {
 
             if (config.getLoad() != null && config.getLoad().isForcemerge()) {
                 logger.info("Triggering async force merge on index '{}' (fires in background, does not block load command)...", indexName);
-                engine.forcemerge(indexName, 1);
+                engine.forcemerge(indexName);
                 logger.info("Force merge submitted; load command complete. Monitor task progress via GET /_tasks?actions=indices:admin/forcemerge");
             }
 

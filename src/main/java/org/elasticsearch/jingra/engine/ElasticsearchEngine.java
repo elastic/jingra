@@ -98,11 +98,10 @@ public class ElasticsearchEngine extends AbstractBenchmarkEngine {
         restClient.performRequest(request);
     }
 
-    protected String forcemergeOperation(String indexName, int maxNumSegments) throws Exception {
+    protected String forcemergeOperation(String indexName) throws Exception {
         co.elastic.clients.transport.rest5_client.low_level.Request request =
                 new co.elastic.clients.transport.rest5_client.low_level.Request(
-                        "POST", "/" + indexName + "/_forcemerge?max_num_segments=" + maxNumSegments
-                                + "&wait_for_completion=false");
+                        "POST", "/" + indexName + "/_forcemerge?wait_for_completion=false");
         co.elastic.clients.transport.rest5_client.low_level.Response response = restClient.performRequest(request);
         byte[] bodyBytes = response.getEntity() != null ? response.getEntity().getContent().readAllBytes() : new byte[0];
         String bodyStr = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
@@ -132,14 +131,13 @@ public class ElasticsearchEngine extends AbstractBenchmarkEngine {
     }
 
     @Override
-    public void forcemerge(String indexName, int maxNumSegments) {
+    public void forcemerge(String indexName) {
         if (!hasClient()) {
             throw new IllegalStateException("Elasticsearch client not initialized");
         }
         try {
-            String taskId = forcemergeOperation(indexName, maxNumSegments);
-            logger.info("Force merge submitted for index '{}' (max_num_segments={}); task ID: {}",
-                    indexName, maxNumSegments, taskId);
+            String taskId = forcemergeOperation(indexName);
+            logger.info("Force merge submitted for index '{}' (best-effort); task ID: {}", indexName, taskId);
             long startMs = System.currentTimeMillis();
             while (true) {
                 String body = pollTaskOperation(taskId);

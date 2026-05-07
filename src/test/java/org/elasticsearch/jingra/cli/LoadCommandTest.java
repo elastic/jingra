@@ -488,7 +488,7 @@ class LoadCommandTest {
             }
 
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+            protected String forcemergeOperation(String indexName) {
                 forceMergeCalled.set(true);
                 return "nodeA:1";
             }
@@ -545,7 +545,7 @@ class LoadCommandTest {
             }
 
             @Override
-            protected String forcemergeOperation(String indexName, int maxNumSegments) {
+            protected String forcemergeOperation(String indexName) {
                 forceMergeCalled.set(true);
                 return "nodeA:1";
             }
@@ -580,7 +580,7 @@ class LoadCommandTest {
             }
 
             @Override
-            public void forcemerge(String indexName, int maxNumSegments) {
+            public void forcemerge(String indexName) {
                 forcemergeCalledOnMock.set(true);
                 // no-op (mirrors the interface default)
             }

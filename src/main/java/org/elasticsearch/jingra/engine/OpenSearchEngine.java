@@ -91,9 +91,9 @@ public class OpenSearchEngine extends AbstractBenchmarkEngine {
         return restClient.performRequest(request);
     }
 
-    protected String forcemergeOperation(String indexName, int maxNumSegments) throws Exception {
+    protected String forcemergeOperation(String indexName) throws Exception {
         Request request = new Request("POST",
-                "/" + indexName + "/_forcemerge?max_num_segments=" + maxNumSegments + "&wait_for_completion=false");
+                "/" + indexName + "/_forcemerge?wait_for_completion=false");
         Response response = performRestRequest(request);
         byte[] bodyBytes = response.getEntity() != null ? response.getEntity().getContent().readAllBytes() : new byte[0];
         String bodyStr = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
@@ -122,14 +122,13 @@ public class OpenSearchEngine extends AbstractBenchmarkEngine {
     }
 
     @Override
-    public void forcemerge(String indexName, int maxNumSegments) {
+    public void forcemerge(String indexName) {
         if (!hasClient()) {
             throw new IllegalStateException("OpenSearch client not initialized");
         }
         try {
-            String taskId = forcemergeOperation(indexName, maxNumSegments);
-            logger.info("Force merge submitted for index '{}' (max_num_segments={}); task ID: {}",
-                    indexName, maxNumSegments, taskId);
+            String taskId = forcemergeOperation(indexName);
+            logger.info("Force merge submitted for index '{}' (best-effort); task ID: {}", indexName, taskId);
             long startMs = System.currentTimeMillis();
             while (true) {
                 String body = pollTaskOperation(taskId);
